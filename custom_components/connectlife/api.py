@@ -19,7 +19,7 @@ from connectlife.appliance import ConnectLifeAppliance
 
 _LOGGER = logging.getLogger(__name__)
 
-TRANSIENT_STATUSES = frozenset({401, 403, 500, 502, 503, 504})
+TRANSIENT_STATUSES = frozenset({401, 500, 502, 503, 504})
 AUTH_TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
 BAPI_USER_AGENT = "connectlife-api-connector 2.1.4"
 GATEWAY_USER_AGENT = "Runner/2.0.6 (iPhone; iOS 17.2.1; Scale/3.00)"
