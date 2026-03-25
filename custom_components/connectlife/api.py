@@ -102,6 +102,7 @@ class ConnectLifeApi:
         self._refresh_token: str | None = None
         self._refresh_token_expires: dt.datetime | None = None
         self.appliances: Sequence[ConnectLifeAppliance] = []
+        self._token_lock = asyncio.Lock()
 
     async def authenticate(self) -> bool:
         """Test whether the full ConnectLife login flow succeeds."""
@@ -194,6 +195,10 @@ class ConnectLifeApi:
                 _LOGGER.debug(result)
 
     async def _fetch_access_token(self) -> None:
+        async with self._token_lock:
+            await self._fetch_access_token_locked()
+
+    async def _fetch_access_token_locked(self) -> None:
         now = dt.datetime.now()
         if self._expires is None or self._access_token is None:
             await self._initial_access_token_with_retry()

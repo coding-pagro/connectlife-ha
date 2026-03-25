@@ -20,14 +20,13 @@ _LOGGER = logging.getLogger(__name__)
 class ConnectLifeCoordinator(DataUpdateCoordinator[dict[str, ConnectLifeAppliance]]):
     """ConnectLife coordinator."""
 
-    # We need initial data, so no retries for first request.
-    error_count = MAX_RETRIES
-    # Register of current entities (used for cleanup).
-    entities: dict[str, Platform] = {}
-
     def __init__(self, hass, api: ConnectLifeApi):
         """Initialize coordinator."""
         self.api = api
+        # We need initial data, so no retries for first request.
+        self.error_count = MAX_RETRIES
+        # Register of current entities (used for cleanup).
+        self.entities: dict[str, Platform] = {}
         super().__init__(
             hass,
             _LOGGER,
@@ -76,7 +75,7 @@ class ConnectLifeCoordinator(DataUpdateCoordinator[dict[str, ConnectLifeApplianc
         """Updates the device, and sets the properties in local copy and notify to avoid refetching."""
         await self.api.update_appliance(self.data[device_id].puid, {k: str(v) for k, v in command.items()})
         self.data[device_id].status_list.update(properties)
-        self.async_update_listeners()
+        self.async_set_updated_data(self.data)
 
     def add_entity(self, entity_unique_id: str, platform: Platform):
         """Add known entity."""
