@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 import asyncio
-from typing import Any, Sequence, cast
+from typing import Any, NamedTuple, Sequence, cast
 
 import aiohttp
 from cryptography.hazmat.primitives import serialization
@@ -19,11 +19,12 @@ from connectlife.appliance import ConnectLifeAppliance
 
 _LOGGER = logging.getLogger(__name__)
 
-TRANSIENT_STATUSES = frozenset({401, 403, 500, 502, 503, 504})
+TRANSIENT_STATUSES = frozenset({401, 500, 502, 503, 504})
 AUTH_TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
 BAPI_USER_AGENT = "connectlife-api-connector 2.1.4"
 GATEWAY_USER_AGENT = "Runner/2.0.6 (iPhone; iOS 17.2.1; Scale/3.00)"
 GATEWAY_BASE_URL = "https://clife-eu-gateway.hijuconn.com"
+GATEWAY_DEVICE_LIST_URL = f"{GATEWAY_BASE_URL}/clife-svc/pu/get_device_status_list"
 GATEWAY_UPDATE_URL = f"{GATEWAY_BASE_URL}/device/pu/property/set"
 GATEWAY_APP_ID = "47110565134383"
 GATEWAY_APP_SECRET = "yOzhz6junYno-nmULM3Wr7PU_dpSZN22ZdluvVWZ4uW5ZwwG8fIGCHTbrhcnU-iv"
@@ -32,6 +33,7 @@ GATEWAY_TIMEZONE = "1.0"
 GATEWAY_VERSION = "5.0"
 GATEWAY_SIGN_SUFFIX = "D9519A4B756946F081B7BB5B5E8D1197"
 GATEWAY_INVALID_ACCESS_TOKEN = 100026
+BAPI_APPLIANCES_TIMEOUT = aiohttp.ClientTimeout(total=10)
 GATEWAY_PUBLIC_KEY = cast(
     RSAPublicKey,
     serialization.load_pem_public_key(
@@ -68,17 +70,37 @@ class LifeConnectAuthError(LifeConnectError):
     """Authentication failure against ConnectLife."""
 
 
+class OAuthClientProfile(NamedTuple):
+    """OAuth client credentials for ConnectLife token exchange."""
+
+    name: str
+    client_id: str
+    client_secret: str
+    redirect_uri: str
+
+
+LEGACY_OAUTH_PROFILE = OAuthClientProfile(
+    name="legacy",
+    client_id="5065059336212",
+    client_secret="07swfKgvJhC3ydOUS9YV_SwVz0i4LKqlOLGNUukYHVMsJRF1b-iWeUGcNlXyYCeK",
+    redirect_uri="https://api.connectlife.io/swagger/oauth2-redirect.html",
+)
+OFFICIAL_OAUTH_PROFILE = OAuthClientProfile(
+    name="official",
+    client_id="9793620883275788",
+    client_secret="7h1m3gZVlILyBvIFBNmzXwoFYLhkGqG9NQd2jBzuZCqJKCTyCtYwQtXi4tVBjg9B",
+    redirect_uri="http://homeassistant.local:8123/auth/external/callback",
+)
+
+
 class ConnectLifeApi:
     """ConnectLife API client."""
 
     api_key = "4_yhTWQmHFpZkQZDSV1uV-_A"
-    client_id = "5065059336212"
-    client_secret = "07swfKgvJhC3ydOUS9YV_SwVz0i4LKqlOLGNUukYHVMsJRF1b-iWeUGcNlXyYCeK"
 
     login_url = "https://accounts.eu1.gigya.com/accounts.login"
     jwt_url = "https://accounts.eu1.gigya.com/accounts.getJWT"
 
-    oauth2_redirect = "https://api.connectlife.io/swagger/oauth2-redirect.html"
     oauth2_authorize = "https://oauth.hijuconn.com/oauth/authorize"
     oauth2_token = "https://oauth.hijuconn.com/oauth/token"
 
@@ -87,13 +109,24 @@ class ConnectLifeApi:
 
     def __init__(self, username: str, password: str, test_server: str | None = None):
         """Initialize the client."""
+        self._oauth_profiles: tuple[OAuthClientProfile, ...] = (
+            LEGACY_OAUTH_PROFILE,
+            OFFICIAL_OAUTH_PROFILE,
+        )
         if test_server:
             self.login_url = f"{test_server}/accounts.login"
             self.jwt_url = f"{test_server}/accounts.getJWT"
-            self.oauth2_redirect = f"{test_server}/swagger/oauth2-redirect.html"
             self.oauth2_authorize = f"{test_server}/oauth/authorize"
             self.oauth2_token = f"{test_server}/oauth/token"
             self.appliances_url = f"{test_server}/appliances"
+            self._oauth_profiles = (
+                OAuthClientProfile(
+                    name="test-server",
+                    client_id=LEGACY_OAUTH_PROFILE.client_id,
+                    client_secret=LEGACY_OAUTH_PROFILE.client_secret,
+                    redirect_uri=f"{test_server}/swagger/oauth2-redirect.html",
+                ),
+            )
 
         self._username = username
         self._password = password
@@ -101,6 +134,7 @@ class ConnectLifeApi:
         self._expires: dt.datetime | None = None
         self._refresh_token: str | None = None
         self._refresh_token_expires: dt.datetime | None = None
+        self._active_oauth_profile = self._oauth_profiles[0]
         self.appliances: Sequence[ConnectLifeAppliance] = []
         self._token_lock = asyncio.Lock()
 
@@ -126,7 +160,24 @@ class ConnectLifeApi:
     async def get_appliances_json(self) -> Any:
         """Fetch the appliance list as JSON."""
         await self._fetch_access_token()
-        return await self._request_appliances_json(retry_on_reauth=True)
+        try:
+            return await self._request_appliances_json(retry_on_reauth=True)
+        except LifeConnectAuthError:
+            raise
+        except (aiohttp.ClientError, TimeoutError) as err:
+            _LOGGER.warning(
+                "ConnectLife appliance list request failed via bapi, trying HijuConn gateway: %s",
+                err,
+            )
+            return await self._request_gateway_appliances_json(retry_on_reauth=True)
+        except LifeConnectError as err:
+            if not self._should_fallback_to_gateway(err):
+                raise
+            _LOGGER.warning(
+                "ConnectLife appliance list request failed via bapi with status=%s, trying HijuConn gateway",
+                err.status,
+            )
+            return await self._request_gateway_appliances_json(retry_on_reauth=True)
 
     async def update_appliance(self, puid: str, properties: dict[str, str]) -> None:
         """Update an appliance."""
@@ -155,6 +206,7 @@ class ConnectLifeApi:
                     "User-Agent": BAPI_USER_AGENT,
                     "X-Token": self._require_access_token(),
                 },
+                timeout=BAPI_APPLIANCES_TIMEOUT,
             ) as response:
                 if response.status != 200:
                     body = await self._read_response_body(response)
@@ -172,6 +224,21 @@ class ConnectLifeApi:
                         endpoint=self.appliances_url,
                     )
                 return await response.json()
+
+    async def _request_gateway_appliances_json(self, *, retry_on_reauth: bool) -> list[dict[str, Any]]:
+        gateway_response = await self._request_gateway_json(
+            GATEWAY_DEVICE_LIST_URL,
+            payload={},
+            retry_on_reauth=retry_on_reauth,
+            method="GET",
+        )
+        device_list = gateway_response.get("deviceList")
+        if not isinstance(device_list, list):
+            raise LifeConnectError(
+                "Unexpected response from HijuConn gateway: missing 'deviceList'",
+                endpoint=GATEWAY_DEVICE_LIST_URL,
+            )
+        return device_list
 
     async def _update_bapi_appliance(self, data: dict[str, Any]) -> None:
         async with self._client_session() as session:
@@ -225,40 +292,60 @@ class ConnectLifeApi:
             await self._initial_access_token_with_retry()
 
     async def _initial_access_token_with_retry(self) -> None:
-        attempts = 2
-        for attempt in range(1, attempts + 1):
-            try:
-                await self._initial_access_token()
-                return
-            except (aiohttp.ClientError, TimeoutError) as err:
-                if attempt == attempts:
-                    raise LifeConnectAuthError(
-                        f"Unexpected error during login: {err}"
-                    ) from err
-                _LOGGER.warning(
-                    "ConnectLife login attempt %d/%d failed with transport error, retrying: %s",
-                    attempt,
-                    attempts,
-                    err,
-                )
-            except LifeConnectAuthError as err:
-                if attempt == attempts or err.status not in AUTH_TRANSIENT_STATUSES:
-                    raise
-                _LOGGER.warning(
-                    "ConnectLife login attempt %d/%d failed with transient auth error, retrying: %s",
-                    attempt,
-                    attempts,
-                    err,
-                )
-            self._reset_tokens()
-            await asyncio.sleep(2)
+        profiles = self._oauth_profiles_in_order()
+        last_error: Exception | None = None
 
-    async def _initial_access_token(self) -> None:
+        for profile_index, profile in enumerate(profiles, start=1):
+            attempts = 2
+            for attempt in range(1, attempts + 1):
+                try:
+                    await self._initial_access_token(profile)
+                    self._active_oauth_profile = profile
+                    return
+                except (aiohttp.ClientError, TimeoutError) as err:
+                    last_error = LifeConnectAuthError(
+                        f"Unexpected error during login: {err}"
+                    )
+                    if attempt == attempts:
+                        break
+                    _LOGGER.warning(
+                        "ConnectLife login attempt %d/%d via %s OAuth client failed with transport error, retrying: %s",
+                        attempt,
+                        attempts,
+                        profile.name,
+                        err,
+                    )
+                except LifeConnectAuthError as err:
+                    last_error = err
+                    if attempt == attempts or err.status not in AUTH_TRANSIENT_STATUSES:
+                        break
+                    _LOGGER.warning(
+                        "ConnectLife login attempt %d/%d via %s OAuth client failed with transient auth error, retrying: %s",
+                        attempt,
+                        attempts,
+                        profile.name,
+                        err,
+                    )
+                self._reset_tokens()
+                await asyncio.sleep(2)
+
+            if profile_index < len(profiles):
+                _LOGGER.warning(
+                    "ConnectLife login via %s OAuth client failed, trying %s OAuth client",
+                    profile.name,
+                    profiles[profile_index].name,
+                )
+
+        if last_error is not None:
+            raise cast(LifeConnectAuthError, last_error)
+        raise LifeConnectAuthError("Unexpected error during login")
+
+    async def _initial_access_token(self, profile: OAuthClientProfile) -> None:
         async with self._client_session() as session:
             uid, login_token = await self._login_to_gigya(session)
             id_token = await self._fetch_jwt(session, login_token)
-            code = await self._authorize(session, uid, id_token)
-            await self._exchange_authorization_code(session, code)
+            code = await self._authorize(session, uid, id_token, profile)
+            await self._exchange_authorization_code(session, code, profile)
 
     async def _login_to_gigya(self, session: aiohttp.ClientSession) -> tuple[str, str]:
         async with session.post(
@@ -322,12 +409,13 @@ class ConnectLifeApi:
         session: aiohttp.ClientSession,
         uid: str,
         id_token: str,
+        profile: OAuthClientProfile,
     ) -> str:
         async with session.post(
             self.oauth2_authorize,
             json={
-                "client_id": self.client_id,
-                "redirect_uri": self.oauth2_redirect,
+                "client_id": profile.client_id,
+                "redirect_uri": profile.redirect_uri,
                 "idToken": id_token,
                 "response_type": "code",
                 "thirdType": "CDC",
@@ -350,13 +438,14 @@ class ConnectLifeApi:
         self,
         session: aiohttp.ClientSession,
         code: str,
+        profile: OAuthClientProfile,
     ) -> None:
         async with session.post(
             self.oauth2_token,
             data={
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "redirect_uri": self.oauth2_redirect,
+                "client_id": profile.client_id,
+                "client_secret": profile.client_secret,
+                "redirect_uri": profile.redirect_uri,
                 "grant_type": "authorization_code",
                 "code": code,
             },
@@ -378,9 +467,9 @@ class ConnectLifeApi:
             async with session.post(
                 self.oauth2_token,
                 data={
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "redirect_uri": self.oauth2_redirect,
+                    "client_id": self._active_oauth_profile.client_id,
+                    "client_secret": self._active_oauth_profile.client_secret,
+                    "redirect_uri": self._active_oauth_profile.redirect_uri,
                     "grant_type": "refresh_token",
                     "refresh_token": self._refresh_token,
                 },
@@ -415,15 +504,24 @@ class ConnectLifeApi:
         *,
         payload: dict[str, Any],
         retry_on_reauth: bool,
+        method: str = "POST",
     ) -> dict[str, Any]:
         request_data = self._gateway_request_data(payload)
 
         async with self._client_session() as session:
-            async with session.post(
-                url,
-                json=request_data,
-                headers={"User-Agent": GATEWAY_USER_AGENT},
-            ) as response:
+            request = session.get if method == "GET" else session.post
+            request_kwargs: dict[str, Any]
+            if method == "GET":
+                request_kwargs = {
+                    "params": request_data,
+                    "headers": {"User-Agent": GATEWAY_USER_AGENT},
+                }
+            else:
+                request_kwargs = {
+                    "json": request_data,
+                    "headers": {"User-Agent": GATEWAY_USER_AGENT},
+                }
+            async with request(url, **request_kwargs) as response:
                 if response.status != 200:
                     body = await self._read_response_body(response)
                     raise self._response_error(
@@ -454,6 +552,7 @@ class ConnectLifeApi:
                 url,
                 payload=payload,
                 retry_on_reauth=False,
+                method=method,
             )
 
         error_type = LifeConnectAuthError if error_code == GATEWAY_INVALID_ACCESS_TOKEN else LifeConnectError
@@ -498,6 +597,16 @@ class ConnectLifeApi:
         request_data.update(payload)
         request_data["sign"] = self._sign_gateway_request(request_data)
         return request_data
+
+    def _oauth_profiles_in_order(self) -> tuple[OAuthClientProfile, ...]:
+        return (self._active_oauth_profile,) + tuple(
+            profile
+            for profile in self._oauth_profiles
+            if profile != self._active_oauth_profile
+        )
+
+    def _should_fallback_to_gateway(self, err: LifeConnectError) -> bool:
+        return err.endpoint == self.appliances_url and err.status in TRANSIENT_STATUSES
 
     @staticmethod
     def _sign_gateway_request(payload: dict[str, Any]) -> str:
