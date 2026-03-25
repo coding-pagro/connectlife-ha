@@ -84,7 +84,7 @@ class ConnectLifeSelect(ConnectLifeEntity, SelectEntity):
                     self.status,
                     self.nickname,
                 )
-                _value = None
+                value = None
             self._attr_current_option = value
 
     async def async_select_option(self, option: str) -> None:

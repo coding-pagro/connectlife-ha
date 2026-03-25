@@ -79,7 +79,7 @@ class ConnectLifeCoordinator(DataUpdateCoordinator[dict[str, ConnectLifeApplianc
 
     def add_entity(self, entity_unique_id: str, platform: Platform):
         """Add known entity."""
-        self.entities[entity_unique_id] = platform;
+        self.entities[entity_unique_id] = platform
 
     async def cleanup_removed_entities(self) -> None:
         """

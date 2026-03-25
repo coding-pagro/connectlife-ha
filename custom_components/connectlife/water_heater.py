@@ -109,7 +109,7 @@ class ConnectLifeWaterHeater(ConnectLifeEntity, WaterHeaterEntity):
         self.unknown_values = {}
 
         for dd_entry in data_dictionary.properties.values():
-            if hasattr(dd_entry, Platform.WATER_HEATER) and dd_entry in appliance.status_list and dd_entry.water_heater.target is not None:
+            if hasattr(dd_entry, Platform.WATER_HEATER) and dd_entry.name in appliance.status_list and dd_entry.water_heater.target is not None:
                 self.target_map[dd_entry.water_heater.target] = dd_entry.name
 
         for target, status in self.target_map.items():
@@ -193,7 +193,7 @@ class ConnectLifeWaterHeater(ConnectLifeEntity, WaterHeaterEntity):
                     else:
                         _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
                 elif target == IS_AWAY_MODE_ON:
-                    self._attr_is_away_mode_on = IS_AWAY_MODE_ON == self.is_away_mode_on
+                    self._attr_is_away_mode_on = value == self.away_mode_on
                 else:
                     if value == self.unknown_values[status]:
                         value = None

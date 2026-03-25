@@ -327,7 +327,7 @@ class ConnectLifeClimate(ConnectLifeEntity, ClimateEntity):
     async def async_set_swing_horizontal_mode(self, swing_horizontal_mode: str) -> None:
         """Set the swing mode."""
         await self.async_update_device({
-            self.target_map[SWING_MODE]: self.swing_horizontal_mode_map[swing_horizontal_mode]
+            self.target_map[SWING_HORIZONTAL_MODE]: self.swing_horizontal_mode_reverse_map[swing_horizontal_mode]
         })
 
     def add_target_temperature(self, request: dict[str, int]) -> dict[str, int]:

@@ -83,7 +83,7 @@ class Climate:
             climate = {}
         self.target = climate[TARGET] if TARGET in climate else None
         if self.target is None:
-            _LOGGER.warning("Missing climate.target for for %s", name)
+            _LOGGER.warning("Missing climate.target for %s", name)
         self.options = climate[OPTIONS] if OPTIONS in climate else {}
         if not self.options and self.target in [
             FAN_MODE,
@@ -114,7 +114,7 @@ class Humidifier:
             humidifier = {}
         self.target = humidifier[TARGET] if TARGET in humidifier else None
         if self.target is None:
-            _LOGGER.warning("Missing humidifier.target for for %s", name)
+            _LOGGER.warning("Missing humidifier.target for %s", name)
         self.options = humidifier[OPTIONS] if OPTIONS in humidifier else {}
         if not self.options and self.target in [ACTION, MODE]:
             _LOGGER.warning("Missing humidifier.options for %s", name)
@@ -290,7 +290,7 @@ class WaterHeater:
             water_heater = {}
         self.target = water_heater[TARGET] if TARGET in water_heater else None
         if self.target is None:
-            _LOGGER.warning("Missing water_heater.target for for %s", name)
+            _LOGGER.warning("Missing water_heater.target for %s", name)
         self.options = water_heater[OPTIONS] if OPTIONS in water_heater else {}
         if not self.options and self.target in [
             CURRENT_OPERATION,
