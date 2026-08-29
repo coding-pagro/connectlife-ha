@@ -263,7 +263,9 @@ class OptionsFlowHandler(OptionsFlow):
         coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
         appliance = coordinator.data.get(self._device_id)
         contested = (
-            contested_climate_targets(appliance, Dictionaries.get_dictionary(appliance))
+            contested_climate_targets(
+                appliance, await Dictionaries.async_get_dictionary(self.hass, appliance)
+            )
             if appliance
             else {}
         )

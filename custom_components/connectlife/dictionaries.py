@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 
 from connectlife.appliance import ConnectLifeAppliance
 from homeassistant.const import Platform, EntityCategory
+from homeassistant.core import HomeAssistant
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.humidifier import HumidifierDeviceClass
 from homeassistant.components.number import NumberDeviceClass
@@ -616,14 +617,9 @@ class Dictionaries:
         for prop in list(properties.values()):
             if prop.combine:
                 for source in prop.combine:
-                    source_name = source[PROPERTY]
-                    if source_name not in raw_entries:
-                        _LOGGER.warning(
-                            "%s combine references unknown property %s",
-                            prop.name,
-                            source_name,
-                        )
-                    properties[source_name].disable = True
+                    # Sources normally appear only inside combine blocks (no
+                    # top-level entry); the defaultdict creates and disables them.
+                    properties[source[PROPERTY]].disable = True
 
         buttons = [Button(b) for b in raw_buttons]
 
@@ -650,5 +646,19 @@ class Dictionaries:
             statistics_source=statistics_source,
             statistics_sensors=statistics_sensors,
         )
-        cls.dictionaries[key] = dictionary
-        return dictionary
+        # get_dictionary runs both on the event loop and in executor jobs, and
+        # multiple config entries may warm the cache concurrently; setdefault
+        # keeps the first-stored instance so all consumers share one object
+        # (some Property state, e.g. learned select/sensor options, is mutated
+        # at runtime and must not be split across duplicate instances).
+        return cls.dictionaries.setdefault(key, dictionary)
+
+    @classmethod
+    async def async_get_dictionary(
+        cls, hass: HomeAssistant, appliance: ConnectLifeAppliance
+    ) -> Dictionary:
+        """Loop-safe variant: offloads the blocking YAML load on a cache miss."""
+        key = f"{appliance.device_type_code}-{appliance.device_feature_code}"
+        if key in cls.dictionaries:
+            return cls.dictionaries[key]
+        return await hass.async_add_executor_job(cls.get_dictionary, appliance)

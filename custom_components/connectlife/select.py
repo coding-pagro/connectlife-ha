@@ -1,7 +1,5 @@
 """Provides a selector for ConnectLife."""
 
-import logging
-
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -14,8 +12,6 @@ from .dictionaries import Dictionaries, Property
 from .entity import ConnectLifeEntity
 from connectlife.appliance import ConnectLifeAppliance
 from .utils import climate_bound_properties, device_target_overrides, has_platform
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -88,12 +84,7 @@ class ConnectLifeSelect(ConnectLifeEntity, SelectEntity):
             else:
                 str_value = str(value)
                 if str_value not in self._attr_options:
-                    _LOGGER.warning(
-                        "Got unexpected value %s for %s (%s)",
-                        str_value,
-                        self.status,
-                        self.nickname,
-                    )
+                    self._warn_unexpected_value(self.status, str_value)
                     self.options_map[value] = str_value
                     self.reverse_options_map[str_value] = value
                     self._attr_options = [*self._attr_options, str_value]
