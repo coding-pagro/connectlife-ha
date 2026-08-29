@@ -3,6 +3,7 @@
 import logging
 import re
 from abc import abstractmethod
+from collections.abc import Mapping
 
 from connectlife.api import LifeConnectError
 from homeassistant.const import Platform
@@ -121,7 +122,11 @@ class ConnectLifeEntity(CoordinatorEntity[ConnectLifeCoordinator]):
         self._refresh_state()
         self.async_write_ha_state()
 
-    async def async_update_device(self, command: dict[str, int], properties: dict[str, int] | None = None):
+    async def async_update_device(
+        self,
+        command: dict[str, int | str],
+        properties: Mapping[str, int | str] | None = None,
+    ):
         if properties is None:
             properties = command.copy()
         try:

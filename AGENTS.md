@@ -25,10 +25,15 @@ uv run python -m scripts.sort_translations
 # Run the test server for local development
 uv run python -m connectlife.test_server -d <dumps_dir>
 
+# Run the test suite
+uv run pytest
+
 # Type check
 uv run pyright
 
-# CI runs hassfest only (no linter/formatter/type checker configured)
+# CI (on pull_request and push to main) runs: hassfest, HACS validation,
+# validate_mappings, gen_strings (strings/translations up to date), pytest,
+# and pyright.
 ```
 
 ## Architecture

@@ -57,7 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     test_server_url = (
         entry.options.get(CONF_TEST_SERVER_URL)
-       if entry.options.get(CONF_DEVELOPMENT_MODE)
+        if entry.options.get(CONF_DEVELOPMENT_MODE)
         else None
     )
     api = create_api(
