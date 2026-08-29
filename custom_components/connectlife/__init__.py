@@ -76,6 +76,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    # Data dictionaries are loaded from packaged YAML files on first access per
+    # device type and then cached; warm the cache via the executor so that
+    # synchronous disk I/O doesn't block the event loop when platform setup
+    # (and the has_statistics check below) call Dictionaries.get_dictionary().
+    await hass.async_add_executor_job(
+        lambda: [Dictionaries.get_dictionary(a) for a in coordinator.data.values()]
+    )
+
     # Only create the statistics coordinator if some device opts into a statistics
     # endpoint with at least one sensor enabled (otherwise it would poll nothing).
     has_statistics = any(

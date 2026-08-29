@@ -137,7 +137,7 @@ class ConnectLifeHumidifier(ConnectLifeEntity, HumidifierEntity):
                         self._attr_mode = self.mode_map[value]
                     else:
                         self._attr_mode = None
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 else:
                     setattr(self, f"_attr_{target}", value)
 

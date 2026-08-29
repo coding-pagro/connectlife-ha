@@ -38,6 +38,8 @@ class ConnectLifeEntity(CoordinatorEntity[ConnectLifeCoordinator]):
     _unavailable_status: str | None = None
     _unavailable_value: int | None = None
 
+    _warned_unexpected_values: dict[str, object]
+
     def __init__(
             self,
             coordinator: ConnectLifeCoordinator,
@@ -46,6 +48,7 @@ class ConnectLifeEntity(CoordinatorEntity[ConnectLifeCoordinator]):
             platform: Platform):
         """Initialize the entity."""
         super().__init__(coordinator)
+        self._warned_unexpected_values = {}
         self.device_id = appliance.device_id
         self.nickname = appliance.device_nickname
         self._attr_unique_id = f'{appliance.device_id}-{entity_name}'
@@ -165,6 +168,18 @@ class ConnectLifeEntity(CoordinatorEntity[ConnectLifeCoordinator]):
                 await self.coordinator.async_update_device(self.device_id, command, properties)
         except LifeConnectError as api_error:
             raise ServiceValidationError(str(api_error)) from api_error
+
+    def _warn_unexpected_value(self, status: str, value: object) -> None:
+        """Log an unexpected raw value for ``status``, once per distinct value.
+
+        Devices that persistently report a value we don't have a mapping for
+        would otherwise re-log the same warning on every coordinator poll
+        (every 60s). Only re-warn when the offending value actually changes.
+        """
+        if self._warned_unexpected_values.get(status, object()) == value:
+            return
+        self._warned_unexpected_values[status] = value
+        _LOGGER.warning("Got unexpected value %s for %s (%s)", value, status, self.nickname)
 
     def to_translation_key(self, property_name: str) -> str:
         return re.sub(r'_+', '_', property_name.strip().lower().replace(" ", "_"))

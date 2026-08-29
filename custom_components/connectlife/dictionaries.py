@@ -616,7 +616,14 @@ class Dictionaries:
         for prop in list(properties.values()):
             if prop.combine:
                 for source in prop.combine:
-                    properties[source[PROPERTY]].disable = True
+                    source_name = source[PROPERTY]
+                    if source_name not in raw_entries:
+                        _LOGGER.warning(
+                            "%s combine references unknown property %s",
+                            prop.name,
+                            source_name,
+                        )
+                    properties[source_name].disable = True
 
         buttons = [Button(b) for b in raw_buttons]
 

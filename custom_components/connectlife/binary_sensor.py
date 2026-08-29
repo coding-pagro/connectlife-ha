@@ -89,7 +89,7 @@ class ConnectLifeBinaryStatusSensor(ConnectLifeEntity, BinarySensorEntity):
                 self._attr_is_on = self.options[value]
             else:
                 self._attr_is_on = None
-                _LOGGER.warning("Unknown value %d for %s", value, self.status)
+                self._warn_unexpected_value(self.status, value)
 
 
 class ConnectLifeOfflineStateBinarySensor(ConnectLifeEntity, BinarySensorEntity):
