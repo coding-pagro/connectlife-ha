@@ -84,7 +84,7 @@ class ConnectLifeSwitch(ConnectLifeEntity, SwitchEntity):
                 self._attr_is_on = False
             else:
                 self._attr_is_on = None
-                _LOGGER.warning("Unknown value %s for %s", str(value), self.status)
+                self._warn_unexpected_value(self.status, value)
 
     async def async_turn_off(self, **kwargs):
         """Turn off."""

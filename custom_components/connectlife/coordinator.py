@@ -242,9 +242,21 @@ class ConnectLifeStatisticsCoordinator(DataUpdateCoordinator[dict[str, EnergyRes
                 # re-login) for every remaining device. Recovers on the next cycle.
                 _LOGGER.debug("Statistics auth failed; skipping remaining devices this cycle")
                 break
-            except Exception:
+            except LifeConnectError:
+                # Expected, transient API-level failure for this device; quiet by
+                # design so one flaky device doesn't spam the log every cycle.
                 _LOGGER.debug(
                     "Failed to fetch statistics for %s",
+                    appliance.device_nickname,
+                    exc_info=True,
+                )
+                result[device_id] = None
+            except Exception:
+                # Anything else is unexpected (e.g. a response shape we don't
+                # handle) and worth surfacing by default rather than hiding
+                # behind debug logging.
+                _LOGGER.warning(
+                    "Unexpected error fetching statistics for %s",
                     appliance.device_nickname,
                     exc_info=True,
                 )

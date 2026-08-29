@@ -177,7 +177,7 @@ class ConnectLifeWaterHeater(ConnectLifeEntity, WaterHeaterEntity):
                         self._attr_state = self.state_map[value]  # type: ignore[assignment]
                     else:
                         self._attr_state = None
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 elif target == CURRENT_OPERATION:
                     if value in self.operation_map:
                         self._attr_current_operation = self.operation_map[value]
@@ -188,7 +188,7 @@ class ConnectLifeWaterHeater(ConnectLifeEntity, WaterHeaterEntity):
                                 self.is_on = True
                     else:
                         self._attr_current_operation = None
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 elif target == TEMPERATURE_UNIT:
                     if value in self.temperature_unit_map:
                         self._attr_temperature_unit = self.temperature_unit_map[value]
@@ -197,7 +197,7 @@ class ConnectLifeWaterHeater(ConnectLifeEntity, WaterHeaterEntity):
                         if max_temp := self.get_temperature_limit(self.max_temperature_map):
                             self._attr_max_temp = max_temp
                     else:
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 elif target == IS_AWAY_MODE_ON:
                     self._attr_is_away_mode_on = IS_AWAY_MODE_ON == self.is_away_mode_on
                 else:

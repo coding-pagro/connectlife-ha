@@ -261,19 +261,19 @@ class ConnectLifeClimate(ConnectLifeEntity, ClimateEntity):
                         self._attr_fan_mode = self.fan_mode_map[value]
                     else:
                         self._attr_fan_mode = None
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 elif target == SWING_MODE:
                     if value in self.swing_mode_map:
                         self._attr_swing_mode = self.swing_mode_map[value]
                     else:
                         self._attr_swing_mode = None
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 elif target == SWING_HORIZONTAL_MODE:
                     if value in self.swing_horizontal_mode_map:
                         self._attr_swing_horizontal_mode = self.swing_horizontal_mode_map[value]
                     else:
                         self._attr_swing_horizontal_mode = None
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 elif target == TEMPERATURE_UNIT:
                     if value in self.temperature_unit_map:
                         self._attr_temperature_unit = self.temperature_unit_map[value]
@@ -282,7 +282,7 @@ class ConnectLifeClimate(ConnectLifeEntity, ClimateEntity):
                         if max_temp := self.get_temperature_limit(self.max_temperature_map):
                             self._attr_max_temp = max_temp
                     else:
-                        _LOGGER.warning("Got unexpected value %d for %s (%s)", value, status, self.nickname)
+                        self._warn_unexpected_value(status, value)
                 else:
                     if value == self.unknown_values[status]:
                         value = None
