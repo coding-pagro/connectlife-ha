@@ -124,14 +124,14 @@ class ConnectLifeEntity(CoordinatorEntity[ConnectLifeCoordinator]):
 
     async def async_update_device(
         self,
-        command: dict[str, int | str],
+        command: Mapping[str, int | str],
         properties: Mapping[str, int | str] | None = None,
     ):
         if properties is None:
-            properties = command.copy()
+            properties = command
         try:
             if self._disable_beep:
-                command["t_beep"] = 0
+                command = {**command, "t_beep": 0}
                 try:
                     await self.coordinator.async_update_device(self.device_id, command, properties)
                     self._disable_beep_failure_count = 0
@@ -146,7 +146,7 @@ class ConnectLifeEntity(CoordinatorEntity[ConnectLifeCoordinator]):
                         self.nickname,
                         err,
                     )
-                    command.pop("t_beep", None)
+                    command = {k: v for k, v in command.items() if k != "t_beep"}
                     try:
                         await self.coordinator.async_update_device(self.device_id, command, properties)
                     except LifeConnectError:
