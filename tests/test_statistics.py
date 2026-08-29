@@ -114,11 +114,13 @@ def _appliance(device_id: str, type_code: str, feature: str):
 
 
 def _coordinator(api, data: dict):
-    # Bypass DataUpdateCoordinator.__init__ (needs hass); the fetch loop only uses
-    # self.api and self.appliance_coordinator.data.
+    # Bypass DataUpdateCoordinator.__init__ (needs a real hass); the fetch loop
+    # uses self.api, self.appliance_coordinator.data, and self.hass — the last
+    # only on a dictionary-cache miss, which the seeded cache below rules out.
     coord = ConnectLifeStatisticsCoordinator.__new__(ConnectLifeStatisticsCoordinator)
     coord.api = api  # type: ignore[assignment]
     coord.appliance_coordinator = SimpleNamespace(data=data)  # type: ignore[assignment]
+    coord.hass = None  # type: ignore[assignment]
     return coord
 
 
@@ -176,7 +178,7 @@ async def test_coordinator_auth_error_breaks_remaining_devices():
     data = {"ac": _appliance("ac", *_AC), "wm": _appliance("wm", *_WM)}
     result = await _coordinator(api, data)._async_update_data()
 
-    assert result == {}
+    assert result == {"ac": None}  # failing device recorded as None; wm never reached
     assert api.air_duct_calls == 1
     assert api.consumption_calls == 0  # never reached
 
