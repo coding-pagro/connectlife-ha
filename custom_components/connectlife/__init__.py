@@ -81,7 +81,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # synchronous disk I/O doesn't block the event loop when platform setup
     # (and the has_statistics check below) call Dictionaries.get_dictionary().
     await hass.async_add_executor_job(
-        lambda: [Dictionaries.get_dictionary(a) for a in coordinator.data.values()]
+        lambda appliances: [Dictionaries.get_dictionary(a) for a in appliances],
+        list(coordinator.data.values()),
     )
 
     # Only create the statistics coordinator if some device opts into a statistics
