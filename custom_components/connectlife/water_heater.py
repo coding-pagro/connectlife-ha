@@ -199,7 +199,7 @@ class ConnectLifeWaterHeater(ConnectLifeEntity, WaterHeaterEntity):
                     else:
                         self._warn_unexpected_value(status, value)
                 elif target == IS_AWAY_MODE_ON:
-                    self._attr_is_away_mode_on = IS_AWAY_MODE_ON == self.is_away_mode_on
+                    self._attr_is_away_mode_on = value == self.away_mode_on
                 else:
                     if value == self.unknown_values[status]:
                         value = None

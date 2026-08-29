@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from connectlife.api import LifeConnectAuthError, LifeConnectError
+from connectlife.appliance import ConnectLifeAppliance
 
 from .client import create_api
 from .const import (
@@ -40,6 +41,12 @@ PLATFORMS: list[Platform] = [
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _warm_dictionary_cache(appliances: list[ConnectLifeAppliance]) -> None:
+    """Load (and cache) the data dictionary for each appliance."""
+    for appliance in appliances:
+        Dictionaries.get_dictionary(appliance)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -81,8 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # synchronous disk I/O doesn't block the event loop when platform setup
     # (and the has_statistics check below) call Dictionaries.get_dictionary().
     await hass.async_add_executor_job(
-        lambda appliances: [Dictionaries.get_dictionary(a) for a in appliances],
-        list(coordinator.data.values()),
+        _warm_dictionary_cache, list(coordinator.data.values())
     )
 
     # Only create the statistics coordinator if some device opts into a statistics

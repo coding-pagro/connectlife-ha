@@ -1,3 +1,4 @@
+import aiohttp
 import async_timeout
 import logging
 from collections.abc import Mapping
@@ -229,12 +230,15 @@ class ConnectLifeStatisticsCoordinator(DataUpdateCoordinator[dict[str, EnergyRes
         """Fetch statistics for appliances whose data dictionary opts into an endpoint."""
         result: dict[str, EnergyResult | None] = {}
         for device_id, appliance in self.appliance_coordinator.data.items():
-            dictionary = Dictionaries.get_dictionary(appliance)
+            # Async variant: an appliance of a new device type may appear after
+            # setup warmed the cache, and the YAML load must not block the loop.
+            dictionary = await Dictionaries.async_get_dictionary(self.hass, appliance)
             source = STATISTICS_SOURCES.get(dictionary.statistics_source or "")
             if source is None or not enabled_sensors(
                 dictionary.statistics_source, dictionary.statistics_sensors
             ):
                 continue
+            result[device_id] = None
             try:
                 result[device_id] = await source.fetch(self.api, appliance)
             except LifeConnectAuthError:
@@ -242,15 +246,15 @@ class ConnectLifeStatisticsCoordinator(DataUpdateCoordinator[dict[str, EnergyRes
                 # re-login) for every remaining device. Recovers on the next cycle.
                 _LOGGER.debug("Statistics auth failed; skipping remaining devices this cycle")
                 break
-            except LifeConnectError:
-                # Expected, transient API-level failure for this device; quiet by
-                # design so one flaky device doesn't spam the log every cycle.
+            except (LifeConnectError, aiohttp.ClientError, TimeoutError):
+                # Transient API or connectivity failure for this device (the
+                # library's token fetch raises raw client/timeout errors); quiet
+                # by design so an outage doesn't spam the log every cycle.
                 _LOGGER.debug(
                     "Failed to fetch statistics for %s",
                     appliance.device_nickname,
                     exc_info=True,
                 )
-                result[device_id] = None
             except Exception:
                 # Anything else is unexpected (e.g. a response shape we don't
                 # handle) and worth surfacing by default rather than hiding
@@ -260,5 +264,4 @@ class ConnectLifeStatisticsCoordinator(DataUpdateCoordinator[dict[str, EnergyRes
                     appliance.device_nickname,
                     exc_info=True,
                 )
-                result[device_id] = None
         return result

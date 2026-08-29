@@ -166,12 +166,7 @@ class ConnectLifeStatusSensor(ConnectLifeEntity, SensorEntity):
                 elif value != self.unknown_value:
                     str_value = str(value)
                     if self._attr_options is not None and str_value not in self._attr_options:
-                        _LOGGER.warning(
-                            "Got unexpected value %s for %s (%s)",
-                            str_value,
-                            self.status,
-                            self.nickname,
-                        )
+                        self._warn_unexpected_value(self.status, str_value)
                         self.options_map[value] = str_value
                         self._attr_options = [*self._attr_options, str_value]
                     value = str_value
